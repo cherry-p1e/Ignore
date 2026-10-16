@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Кофеин</string>
+    <string name="add_dose_title">Новая доза</string>
+    <string name="milligrams">Миллиграммы</string>
+    <string name="add">Добавить</string>
+    <string name="cancel">Отмена</string>
+    <string name="caffeine_cleared">Кофеин выведен</string>
+    <string name="no_caffeine">Нет кофеина</string>
+    <string name="countdown_hms">%1$d ч %2$02d мин %3$02d с</string>
+    <string name="countdown_ms">%1$d мин %2$02d с</string>
+    <string name="countdown_s">%1$d с</string>
+    <string name="today_intake_cd">Кофеин за сегодня: %1$d мг</string>
+</resources>
