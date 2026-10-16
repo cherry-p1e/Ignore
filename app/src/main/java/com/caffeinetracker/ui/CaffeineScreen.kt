@@ -24,7 +24,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,7 +51,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.caffeinetracker.R
-import com.caffeinetracker.physics.LiquidPhysics
+import androidx.compose.runtime.rememberUpdatedState
+import com.caffeinetracker.physics.CoffeeFluid
 import com.caffeinetracker.pk.CaffeineKinetics
 import com.caffeinetracker.pk.Dose
 import kotlinx.coroutines.isActive
@@ -82,11 +83,9 @@ private fun CaffeineGlass(
     onAddDose: (Int) -> Unit,
 ) {
     val sensors = rememberTiltSensors()
-    val physics = remember { LiquidPhysics() }
+    val fluid = remember { CoffeeFluid() }
     val lifecycleOwner = LocalLifecycleOwner.current
-    var phi by remember { mutableFloatStateOf(0f) }
-    var wave by remember { mutableFloatStateOf(0f) }
-    var wavePhase by remember { mutableFloatStateOf(0f) }
+    var frame by remember { mutableIntStateOf(0) }
     var clock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var ticker by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val pourLag = remember { Animatable(0f) }
@@ -111,9 +110,13 @@ private fun CaffeineGlass(
         seenIds = ids
         if (added > 0) {
             pourLag.snapTo(pourLag.value + added.toFloat())
+            fluid.pour()
             pourLag.animateTo(0f, tween(durationMillis = 1000, easing = FastOutSlowInEasing))
         }
     }
+
+    val dosesNow = rememberUpdatedState(doses)
+    val pendingNow = rememberUpdatedState(pendingPourMg)
 
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -134,22 +137,24 @@ private fun CaffeineGlass(
                     }
                     lastFrame = frameTime
                     val sample = sensors.sample
-                    physics.step(
+                    val trueNow = CaffeineKinetics.remainingMg(dosesNow.value, now)
+                    val shown = (trueNow - pourLag.value - pendingNow.value).coerceAtLeast(0.0)
+                    val fraction = (shown / CaffeineKinetics.FULL_SCALE_MG).toFloat().coerceIn(0f, 1f)
+                    fluid.step(
                         dt = dt,
-                        targetPhi = LiquidPhysics.restAngle(sample.gx, sample.gy),
+                        gravityX = sample.gx,
+                        gravityY = sample.gy,
+                        gyroX = sample.gyroX,
+                        gyroY = sample.gyroY,
                         gyroZ = sample.gyroZ,
+                        targetFraction = fraction,
                     )
-                    phi = physics.phi
-                    wave = physics.wave
-                    wavePhase = physics.wavePhase
+                    frame++
                 }
             }
         }
     }
 
-    val trueRemaining = CaffeineKinetics.remainingMg(doses, clock)
-    val shownRemaining = (trueRemaining - pourLag.value - pendingPourMg).coerceAtLeast(0.0)
-    val fraction = (shownRemaining / CaffeineKinetics.FULL_SCALE_MG).coerceIn(0.0, 1.0).toFloat()
     val todayMg = CaffeineKinetics.intakeSinceLocalMidnight(doses, clock)
     val countdown = countdownText(
         millis = CaffeineKinetics.millisUntilCleared(CaffeineKinetics.remainingMg(doses, ticker)),
@@ -158,10 +163,8 @@ private fun CaffeineGlass(
 
     Box(Modifier.fillMaxSize()) {
         CoffeeLiquid(
-            fraction = fraction,
-            phi = phi,
-            wave = wave,
-            wavePhase = wavePhase,
+            fluid = fluid,
+            frame = frame,
             modifier = Modifier.fillMaxSize(),
         )
         Column(

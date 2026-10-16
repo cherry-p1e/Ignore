@@ -16,7 +16,13 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.concurrent.atomic.AtomicReference
 
-data class TiltSample(val gx: Float, val gy: Float, val gyroZ: Float)
+data class TiltSample(
+    val gx: Float,
+    val gy: Float,
+    val gyroX: Float,
+    val gyroY: Float,
+    val gyroZ: Float,
+)
 
 /**
  * Gravity and gyroscope, delivered on a dedicated sensor thread.
@@ -28,7 +34,9 @@ class TiltSensors(context: Context) {
     private val gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
     private val thread = HandlerThread("CaffeineSensors").also { it.start() }
     private val handler = Handler(thread.looper)
-    private val sampleRef = AtomicReference(TiltSample(gx = 0f, gy = 9.81f, gyroZ = 0f))
+    private val sampleRef = AtomicReference(
+        TiltSample(gx = 0f, gy = 9.81f, gyroX = 0f, gyroY = 0f, gyroZ = 0f),
+    )
     private var registered = false
 
     val sample: TiltSample get() = sampleRef.get()
@@ -38,7 +46,9 @@ class TiltSensors(context: Context) {
             val values = event.values
             when (event.sensor.type) {
                 Sensor.TYPE_GRAVITY -> sampleRef.updateAndGet { it.copy(gx = values[0], gy = values[1]) }
-                Sensor.TYPE_GYROSCOPE -> sampleRef.updateAndGet { it.copy(gyroZ = values[2]) }
+                Sensor.TYPE_GYROSCOPE -> sampleRef.updateAndGet {
+                    it.copy(gyroX = values[0], gyroY = values[1], gyroZ = values[2])
+                }
             }
         }
 
@@ -55,7 +65,7 @@ class TiltSensors(context: Context) {
     fun stop() {
         if (!registered) return
         sensorManager.unregisterListener(listener)
-        sampleRef.updateAndGet { it.copy(gyroZ = 0f) }
+        sampleRef.updateAndGet { it.copy(gyroX = 0f, gyroY = 0f, gyroZ = 0f) }
         registered = false
     }
 
