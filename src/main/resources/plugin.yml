@@ -23,3 +23,7 @@ commands:
     description: Sends a private message as Server, only for OPs
   Lastlog:
     description: Show last messages sent to you
+  Report:
+    description: Report something to the admins
+  Ignoredeath:
+    description: Toggle hiding death messages from ignored players
