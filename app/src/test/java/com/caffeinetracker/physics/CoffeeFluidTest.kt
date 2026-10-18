@@ -32,6 +32,49 @@ class CoffeeFluidTest {
         assertTrue("top band should be nearly dry, was $top", top < fluid.totalVolume() * 0.12f)
         assertTrue("bottom band should hold the coffee, was $bottom of ${fluid.totalVolume()}", bottom > fluid.totalVolume() * 0.55f)
         assertTrue("waves should have settled, kinetic=${fluid.kineticEnergy()}", fluid.kineticEnergy() < 6f)
+        assertHorizontalSurface(fluid, minHeight = 0.2f, slackRows = 2)
+    }
+
+    @Test
+    fun drain_lowersTheSurface_andLeavesTheBodyFull() {
+        val fluid = CoffeeFluid(columns = 10, rows = 24)
+        val dt = 1f / 60f
+        repeat(150) {
+            fluid.step(dt, 0f, 9.81f, 0f, 0f, 0f, targetFraction = 0.7f)
+        }
+        val before = surfaceRow(fluid)
+        repeat(90) {
+            fluid.step(dt, 0f, 9.81f, 0f, 0f, 0f, targetFraction = 0.35f)
+        }
+        val after = surfaceRow(fluid)
+        val capacity = 10f * 24f
+        assertEquals(capacity * 0.35f, fluid.totalVolume(), capacity * 0.03f)
+        assertTrue("surface should drop ($before -> $after)", after > before + 3)
+        assertTrue(
+            "body under the new surface should stay full, h=${fluid.height(5, 22)}",
+            fluid.height(5, 22) > 0.85f,
+        )
+        assertTrue("the old top of the glass should be dry, h=${fluid.height(5, 1)}", fluid.height(5, 1) < 0.05f)
+    }
+
+    @Test
+    fun splashAboveTheGlass_fallsToTheBottom_insteadOfVanishing() {
+        val columns = 8
+        val rows = 20
+        val fluid = CoffeeFluid(columns = columns, rows = rows)
+        for (y in 0 until 4) {
+            for (x in 0 until columns) fluid.debugSetHeight(x, y, 1f)
+        }
+        val fraction = fluid.totalVolume() / (columns * rows)
+        val dt = 1f / 60f
+        repeat(180) {
+            fluid.step(dt, 0f, 9.81f, 0f, 0f, 0f, targetFraction = fraction)
+        }
+        val top = bandVolume(fluid, 0, 4)
+        val bottom = bandVolume(fluid, 14, 20)
+        assertEquals(columns * 4f, fluid.totalVolume(), columns * 0.4f)
+        assertTrue("splash should leave the top, was $top", top < fluid.totalVolume() * 0.15f)
+        assertTrue("splash should land in the bottom, was $bottom", bottom > fluid.totalVolume() * 0.7f)
     }
 
     @Test
@@ -77,6 +120,21 @@ class CoffeeFluidTest {
     }
 
     @Test
+    fun defaultGrid_stepStaysUnderEightMilliseconds() {
+        val fluid = CoffeeFluid()
+        val dt = 1f / 60f
+        fluid.step(dt, 0f, 9.81f, 0f, 0f, 0f, 0.55f)
+        val frames = 20
+        val start = System.nanoTime()
+        repeat(frames) {
+            fluid.step(dt, 0f, 9.81f, gyroX = 0.4f, gyroY = -0.2f, gyroZ = 1.2f, targetFraction = 0.55f)
+        }
+        val ms = (System.nanoTime() - start) / 1e6 / frames
+        println("coffee step ${fluid.columns}x${fluid.rows} = $ms ms")
+        assertTrue("a frame of fluid took $ms ms", ms < 8.0)
+    }
+
+    @Test
     fun foam_driftsTowardTheLowSide() {
         val fluid = CoffeeFluid(columns = 16, rows = 6)
         repeat(40) {
@@ -106,6 +164,35 @@ class CoffeeFluidTest {
             for (x in 0 until fluid.columns) sum += fluid.height(x, y)
         }
         return sum
+    }
+
+    private fun surfaceRow(fluid: CoffeeFluid): Int {
+        for (y in 0 until fluid.rows) {
+            for (x in 0 until fluid.columns) {
+                if (fluid.height(x, y) > 0.2f) return y
+            }
+        }
+        return fluid.rows
+    }
+
+    private fun assertHorizontalSurface(fluid: CoffeeFluid, minHeight: Float, slackRows: Int) {
+        var minRow = fluid.rows
+        var maxRow = -1
+        for (x in 0 until fluid.columns) {
+            var top = fluid.rows
+            for (y in 0 until fluid.rows) {
+                if (fluid.height(x, y) > minHeight) {
+                    top = y
+                    break
+                }
+            }
+            if (top < minRow) minRow = top
+            if (top > maxRow) maxRow = top
+        }
+        assertTrue(
+            "free surface should be level (rows $minRow..$maxRow)",
+            maxRow - minRow <= slackRows,
+        )
     }
 
     private fun foamCentroidX(fluid: CoffeeFluid): Float {

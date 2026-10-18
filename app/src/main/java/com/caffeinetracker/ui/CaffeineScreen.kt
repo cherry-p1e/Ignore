@@ -29,8 +29,10 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import android.view.Surface
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -117,6 +119,7 @@ private fun CaffeineGlass(
 
     val dosesNow = rememberUpdatedState(doses)
     val pendingNow = rememberUpdatedState(pendingPourMg)
+    val view = LocalView.current
 
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -148,6 +151,7 @@ private fun CaffeineGlass(
                         gyroY = sample.gyroY,
                         gyroZ = sample.gyroZ,
                         targetFraction = fraction,
+                        rotation = view.display?.rotation ?: Surface.ROTATION_0,
                     )
                     frame++
                 }

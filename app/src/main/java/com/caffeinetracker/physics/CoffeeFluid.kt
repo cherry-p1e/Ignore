@@ -1,5 +1,6 @@
 package com.caffeinetracker.physics
 
+import java.util.Arrays
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.hypot
@@ -9,21 +10,20 @@ import kotlin.math.min
 /**
  * Real-time shallow-water height field for one glass of coffee.
  *
- * Each cell holds a column height. Edges carry the volume flow into the
- * neighbor (inertia). A height difference pushes back (pressure), and the
- * in-plane gravity acceleration pulls toward the low side of the phone.
- * Viscosity damps the flow, so after the phone is held still the waves die
- * and the surface settles. Transfers are clamped, so the caffeine volume is
- * conserved by the fluid step; [enforceVolume] then adds or removes the small
- * difference to match the pharmacokinetic fill.
+ * Each cell is a column of coffee. Edges remember how fast volume is moving,
+ * so a tilt sloshes instead of snapping. Gravity packs the coffee against the
+ * low side of the phone: held upright, that side is the bottom of the screen
+ * and the free surface is a level line. Viscosity damps the flow after the
+ * phone is held still. A mild surface-tension term rounds the shoreline.
  *
- * Foam is a second field riding on wet cells. It is visual only: a full
- * layer drains to nothing in [FOAM_LIFETIME_SECONDS], not over the 5-hour
- * caffeine half-life.
+ * Volume matches remaining caffeine. Extra coffee is taken off the uphill
+ * surface of liquid that is already resting in the glass, so the waterline
+ * drops and the body stays full. A splash that is still in the air is not
+ * erased; it falls first. Foam is a second field and is visual only.
  */
 class CoffeeFluid(
-    val columns: Int = 32,
-    val rows: Int = 56,
+    val columns: Int = 72,
+    val rows: Int = 148,
 ) {
     private val count = columns * rows
     private val h = FloatArray(count)
@@ -33,7 +33,22 @@ class CoffeeFluid(
     private val foamScratch = FloatArray(count)
     private val foamOutgoing = FloatArray(count)
     private val motion = FloatArray(count)
+    private val outgoing = FloatArray(count)
+    private val sendLimit = FloatArray(count)
+    private val lap = FloatArray(count)
+    private val score = FloatArray(count)
+    private val order = IntArray(count)
+    private val sortKeys = LongArray(count)
+    private val supported = BooleanArray(count)
     private var pendingPour = false
+
+    private val waveSpeed = 0.50f * rows
+    private val pressure = waveSpeed * waveSpeed
+    private val gravityGain = DROP_ACROSS_GLASS * pressure / (9.81f * rows)
+    private val maxFlow = 1.15f * rows
+    private val gyroGain = 0.45f * maxFlow
+    private val foamDrift = 0.62f * columns.toFloat()
+    private val substepSeconds = min(0.42f / waveSpeed, 0.42f / maxFlow).coerceAtMost(1f / 90f)
 
     fun height(x: Int, y: Int): Float = h[index(x, y)]
 
@@ -55,6 +70,19 @@ class CoffeeFluid(
         return sum
     }
 
+    private fun wetCentroidY(): Float {
+        var mass = 0f
+        var moment = 0f
+        for (y in 0 until rows) {
+            var rowMass = 0f
+            val row = y * columns
+            for (x in 0 until columns) rowMass += h[row + x]
+            mass += rowMass
+            moment += rowMass * y
+        }
+        return if (mass < 1e-3f) (rows - 1) * 0.5f else moment / mass
+    }
+
     fun kineticEnergy(): Float {
         var sum = 0f
         for (value in flowRight) sum += value * value
@@ -64,6 +92,10 @@ class CoffeeFluid(
 
     internal fun debugSetFoam(x: Int, y: Int, value: Float) {
         foam[index(x, y)] = value
+    }
+
+    internal fun debugSetHeight(x: Int, y: Int, value: Float) {
+        h[index(x, y)] = value
     }
 
     fun meanFoam(): Float {
@@ -78,8 +110,9 @@ class CoffeeFluid(
     }
 
     /**
-     * @param gravityX TYPE_GRAVITY x, m/s², device axis pointing right
-     * @param gravityY TYPE_GRAVITY y, m/s², device axis pointing up
+     * @param gravityX TYPE_GRAVITY x, m/s², device axis pointing right in natural orientation
+     * @param gravityY TYPE_GRAVITY y, m/s², device axis pointing up in natural orientation
+     * @param rotation [android.view.Surface] rotation: 0, 1, 2, or 3
      * @param targetFraction remaining caffeine / 400 mg, clamped by the caller to 0..1
      */
     fun step(
@@ -90,14 +123,15 @@ class CoffeeFluid(
         gyroY: Float,
         gyroZ: Float,
         targetFraction: Float,
+        rotation: Int = 0,
     ) {
         val frameDt = dt.coerceIn(0f, 0.05f)
         if (frameDt <= 0f) return
-        val (ax, ay) = screenAcceleration(gravityX, gravityY)
+        val (ax, ay) = screenAcceleration(gravityX, gravityY, rotation)
         motion.fill(0f)
         var left = frameDt
         while (left > 1e-4f) {
-            val sub = min(left, SUBSTEP_SECONDS)
+            val sub = min(left, substepSeconds)
             integrate(sub, ax, ay, gyroX, gyroY, gyroZ)
             left -= sub
         }
@@ -106,60 +140,97 @@ class CoffeeFluid(
             pendingPour = false
             depositPourFoam()
         }
-        depositDisturbanceFoam(frameDt)
+        depositDisturbanceFoam()
         advectFoam(frameDt, ax, ay)
         decayFoam(frameDt)
     }
 
     private fun integrate(dt: Float, ax: Float, ay: Float, gyroX: Float, gyroY: Float, gyroZ: Float) {
+        computeLaplacian()
         val damp = exp(-VISCOSITY * dt)
         val yaw = gyroZ.coerceIn(-MAX_GYRO, MAX_GYRO)
         val pitch = gyroX.coerceIn(-MAX_GYRO, MAX_GYRO)
         val roll = gyroY.coerceIn(-MAX_GYRO, MAX_GYRO)
+        val gravityX = gravityGain * ax
+        val gravityY = gravityGain * ay
+        val centerY = wetCentroidY()
         for (y in 0 until rows) {
-            val yNorm = (y + 0.5f) / rows - 0.5f
+            val yOff = (y - centerY) / rows
+            val row = y * columns
             for (x in 0 until columns - 1) {
-                val left = index(x, y)
-                val right = index(x + 1, y)
+                val left = row + x
+                val right = left + 1
                 val edge = rightEdge(x, y)
-                val pinned = pinnedPair(h[left], h[right])
-                if (pinned) {
+                if (pinnedPair(h[left], h[right])) {
                     flowRight[edge] *= damp
                     continue
                 }
-                val dh = h[left] - h[right]
-                // Positive yaw lags as a horizontal shear; roll rate shoves left/right.
-                val gyroKick = (-yaw * yNorm + roll * 0.15f) * GYRO_GAIN
-                var flow = flowRight[edge] + (PRESSURE * dh + GRAVITY_GAIN * ax + gyroKick) * dt
+                val dh = (h[left] - h[right]) + TENSION * (lap[right] - lap[left])
+                val wet = max(h[left], h[right]).coerceIn(0f, 1f)
+                // Yaw shears around the body of coffee, so a half glass still sloshes
+                // when its surface sits near the middle of the screen.
+                val gyroKick = (-yaw * yOff + roll * 0.25f) * gyroGain
+                var flow = flowRight[edge] + (pressure * dh + gravityX * wet + gyroKick) * dt
                 flow *= damp
-                flow = stopAtLid(flow, sourceHeight = h[left], destinationHeight = h[right])
-                flowRight[edge] = flow.coerceIn(-MAX_FLOW, MAX_FLOW)
+                flow = stopIntoFull(flow, h[left], h[right])
+                flow = stopFromDry(flow, h[left], h[right])
+                flowRight[edge] = flow.coerceIn(-maxFlow, maxFlow)
             }
         }
         for (y in 0 until rows - 1) {
+            val row = y * columns
             for (x in 0 until columns) {
-                val top = index(x, y)
-                val bottom = index(x, y + 1)
+                val top = row + x
+                val bottom = top + columns
                 val edge = downEdge(x, y)
-                val pinned = pinnedPair(h[top], h[bottom])
-                if (pinned) {
+                if (pinnedPair(h[top], h[bottom])) {
                     flowDown[edge] *= damp
                     continue
                 }
                 val xNorm = (x + 0.5f) / columns - 0.5f
-                val dh = h[top] - h[bottom]
-                val gyroKick = (yaw * xNorm + pitch * 0.15f) * GYRO_GAIN
-                var flow = flowDown[edge] + (PRESSURE * dh + GRAVITY_GAIN * ay + gyroKick) * dt
+                val dh = (h[top] - h[bottom]) + TENSION * (lap[bottom] - lap[top])
+                val wet = max(h[top], h[bottom]).coerceIn(0f, 1f)
+                val gyroKick = (yaw * xNorm + pitch * 0.25f) * gyroGain
+                var flow = flowDown[edge] + (pressure * dh + gravityY * wet + gyroKick) * dt
                 flow *= damp
-                flow = stopAtLid(flow, sourceHeight = h[top], destinationHeight = h[bottom])
-                flowDown[edge] = flow.coerceIn(-MAX_FLOW, MAX_FLOW)
+                flow = stopIntoFull(flow, h[top], h[bottom])
+                flow = stopFromDry(flow, h[top], h[bottom])
+                flowDown[edge] = flow.coerceIn(-maxFlow, maxFlow)
             }
         }
         applyFlows(dt)
     }
 
+    private fun computeLaplacian() {
+        for (y in 0 until rows) {
+            val row = y * columns
+            for (x in 0 until columns) {
+                val i = row + x
+                var sum = 0f
+                var n = 0
+                if (x > 0) {
+                    sum += h[i - 1]
+                    n++
+                }
+                if (x + 1 < columns) {
+                    sum += h[i + 1]
+                    n++
+                }
+                if (y > 0) {
+                    sum += h[i - columns]
+                    n++
+                }
+                if (y + 1 < rows) {
+                    sum += h[i + columns]
+                    n++
+                }
+                lap[i] = sum - n * h[i]
+            }
+        }
+    }
+
     private fun applyFlows(dt: Float) {
-        val outgoing = FloatArray(count)
+        outgoing.fill(0f)
         for (y in 0 until rows) {
             for (x in 0 until columns - 1) {
                 val delta = flowRight[rightEdge(x, y)] * dt
@@ -172,21 +243,22 @@ class CoffeeFluid(
                 if (delta > 0f) outgoing[index(x, y)] += delta else outgoing[index(x, y + 1)] -= delta
             }
         }
-        val scale = FloatArray(count) { cell ->
-            if (outgoing[cell] > h[cell] && outgoing[cell] > 1e-6f) h[cell] / outgoing[cell] else 1f
+        for (cell in 0 until count) {
+            val out = outgoing[cell]
+            sendLimit[cell] = if (out > h[cell] && out > 1e-6f) h[cell] / out else 1f
         }
         for (y in 0 until rows) {
             for (x in 0 until columns - 1) {
                 val delta = flowRight[rightEdge(x, y)] * dt
-                if (delta >= 0f) transfer(index(x, y), index(x + 1, y), delta * scale[index(x, y)])
-                else transfer(index(x + 1, y), index(x, y), -delta * scale[index(x + 1, y)])
+                if (delta >= 0f) transfer(index(x, y), index(x + 1, y), delta * sendLimit[index(x, y)])
+                else transfer(index(x + 1, y), index(x, y), -delta * sendLimit[index(x + 1, y)])
             }
         }
         for (y in 0 until rows - 1) {
             for (x in 0 until columns) {
                 val delta = flowDown[downEdge(x, y)] * dt
-                if (delta >= 0f) transfer(index(x, y), index(x, y + 1), delta * scale[index(x, y)])
-                else transfer(index(x, y + 1), index(x, y), -delta * scale[index(x, y + 1)])
+                if (delta >= 0f) transfer(index(x, y), index(x, y + 1), delta * sendLimit[index(x, y)])
+                else transfer(index(x, y + 1), index(x, y), -delta * sendLimit[index(x, y + 1)])
             }
         }
     }
@@ -203,74 +275,177 @@ class CoffeeFluid(
     }
 
     private fun enforceVolume(target: Float, ax: Float, ay: Float) {
-        repeat(columns + rows + 2) {
-            val current = totalVolume()
-            val diff = target - current
-            if (abs(diff) < 1e-3f) return
-            if (diff < 0f) {
-                if (current <= 1e-5f) {
-                    h.fill(0f)
-                    return
-                }
-                val scale = target / current
-                for (i in h.indices) h[i] *= scale
-                return
+        val diff = target - totalVolume()
+        if (abs(diff) < 1e-3f) return
+        prepareScores(ax, ay)
+        if (diff > 0f) addVolume(diff, ax, ay) else peelSupportedExcess(-diff, ax, ay)
+    }
+
+    /**
+     * Pour new coffee onto the lowest open cells so the surface rises as a
+     * line instead of a blob growing from the middle.
+     */
+    private fun addVolume(amount: Float, ax: Float, ay: Float) {
+        var left = amount
+        sortAll(descending = true)
+        val band = levelBand(ax, ay)
+        var i = 0
+        while (i < count && left > 1e-4f) {
+            val base = score[order[i]]
+            var j = i + 1
+            while (j < count && base - score[order[j]] <= band) j++
+            var roomSum = 0f
+            for (k in i until j) {
+                val cell = order[k]
+                if (canReceive(cell)) roomSum += MAX_HEIGHT - h[cell]
             }
-            if (current < 1e-3f) {
-                seed(target, ax, ay)
-                return@repeat
-            }
-            var left = diff
-            var wetSum = 0f
-            for (value in h) if (value > DRY) wetSum += value
-            if (wetSum > 0f) {
-                for (i in h.indices) {
-                    if (h[i] <= DRY) continue
-                    val put = min(MAX_HEIGHT - h[i], left * (h[i] / wetSum))
+            if (roomSum > 1e-5f) {
+                val give = min(left, roomSum)
+                for (k in i until j) {
+                    val cell = order[k]
+                    if (!canReceive(cell)) continue
+                    val room = MAX_HEIGHT - h[cell]
+                    val put = give * (room / roomSum)
                     if (put > 0f) {
-                        h[i] += put
+                        h[cell] += put
                         left -= put
                     }
                 }
             }
-            if (left <= 1e-3f) return
-            val frontier = ArrayList<Int>()
-            for (y in 0 until rows) {
-                for (x in 0 until columns) {
-                    if (h[index(x, y)] <= DRY) continue
-                    if (x > 0 && h[index(x - 1, y)] <= DRY) frontier.add(index(x - 1, y))
-                    if (x + 1 < columns && h[index(x + 1, y)] <= DRY) frontier.add(index(x + 1, y))
-                    if (y > 0 && h[index(x, y - 1)] <= DRY) frontier.add(index(x, y - 1))
-                    if (y + 1 < rows && h[index(x, y + 1)] <= DRY) frontier.add(index(x, y + 1))
-                }
-            }
-            if (frontier.isEmpty()) return
-            val share = left / frontier.size
-            var placed = false
-            for (cell in frontier) {
-                val put = min(MAX_HEIGHT - h[cell], share)
-                if (put > 0f) {
-                    h[cell] += put
-                    placed = true
-                }
-            }
-            if (!placed) return
+            i = j
         }
     }
 
-    private fun seed(target: Float, ax: Float, ay: Float) {
-        var best = 0
-        var bestScore = Float.NEGATIVE_INFINITY
-        for (y in 0 until rows) {
-            for (x in 0 until columns) {
-                val score = ax * x + ay * y
-                if (score > bestScore) {
-                    bestScore = score
-                    best = index(x, y)
+    private fun canReceive(cell: Int): Boolean {
+        if (h[cell] >= MAX_HEIGHT - 1e-3f) return false
+        val down = steeperNeighbor(cell)
+        if (down < 0) return true
+        return h[down] >= MAX_HEIGHT - 0.04f
+    }
+
+    /**
+     * Drop the waterline. Only liquid that is already resting on the glass
+     * is removed, and it is removed from the uphill surface first. A body of
+     * coffee above empty space is left alone so the next steps can drop it.
+     */
+    private fun peelSupportedExcess(excess: Float, ax: Float, ay: Float) {
+        sortAll(descending = true)
+        supported.fill(false)
+        for (i in 0 until count) {
+            val cell = order[i]
+            if (h[cell] <= DRY) continue
+            supported[cell] = restingOnGlass(cell)
+        }
+        var n = 0
+        for (cell in 0 until count) {
+            if (supported[cell] && h[cell] > DRY) order[n++] = cell
+        }
+        if (n == 0) return
+        sortPrefix(n, descending = false)
+        val band = levelBand(ax, ay)
+        var left = excess
+        var i = 0
+        while (left > 1e-4f && i < n) {
+            val base = score[order[i]]
+            var j = i + 1
+            while (j < n && score[order[j]] - base <= band) j++
+            var bandVolume = 0f
+            for (k in i until j) bandVolume += h[order[k]]
+            if (bandVolume <= left + 1e-5f) {
+                for (k in i until j) clearCell(order[k])
+                left -= bandVolume
+            } else {
+                val frac = left / bandVolume
+                for (k in i until j) {
+                    val cell = order[k]
+                    h[cell] -= h[cell] * frac
+                    if (h[cell] <= DRY) clearCell(cell)
                 }
+                left = 0f
+            }
+            i = j
+        }
+    }
+
+    private fun restingOnGlass(cell: Int): Boolean {
+        val x = cell % columns
+        val y = cell / columns
+        val mine = score[cell]
+        var downhill = false
+        var supportedBelow = false
+        fun look(nx: Int, ny: Int) {
+            if (nx < 0 || ny < 0 || nx >= columns || ny >= rows) return
+            val neighbor = index(nx, ny)
+            if (score[neighbor] <= mine + 1e-4f) return
+            downhill = true
+            if (supported[neighbor] && h[neighbor] >= SUPPORTED_HEIGHT) supportedBelow = true
+        }
+        look(x - 1, y)
+        look(x + 1, y)
+        look(x, y - 1)
+        look(x, y + 1)
+        if (!downhill) return true
+        return supportedBelow
+    }
+
+    private fun clearCell(cell: Int) {
+        h[cell] = 0f
+        foam[cell] = 0f
+    }
+
+    private fun prepareScores(ax: Float, ay: Float) {
+        for (y in 0 until rows) {
+            val rowScore = ay * y
+            val row = y * columns
+            for (x in 0 until columns) score[row + x] = ax * x + rowScore
+        }
+    }
+
+    private fun sortAll(descending: Boolean) {
+        for (i in 0 until count) order[i] = i
+        sortPrefix(count, descending)
+    }
+
+    private fun sortPrefix(n: Int, descending: Boolean) {
+        for (i in 0 until n) {
+            val cell = order[i]
+            sortKeys[i] = packKey(score[cell], cell, descending)
+        }
+        Arrays.sort(sortKeys, 0, n)
+        for (i in 0 until n) order[i] = sortKeys[i].toInt()
+    }
+
+    private fun packKey(value: Float, index: Int, descending: Boolean): Long {
+        var bits = value.toRawBits()
+        bits = bits xor (bits shr 31 and 0x7fffffff)
+        if (descending) bits = bits.inv()
+        return (bits.toLong() shl 32) or (index.toLong() and 0xffffffffL)
+    }
+
+    private fun levelBand(ax: Float, ay: Float): Float {
+        val g = hypot(ax, ay)
+        return if (g < 0.6f) 0.05f else 0.35f * g
+    }
+
+    /** Neighbor that is strictly farther downhill, or -1 when this cell is the floor. */
+    private fun steeperNeighbor(cell: Int): Int {
+        val x = cell % columns
+        val y = cell / columns
+        var best = -1
+        var bestScore = score[cell] + 1e-4f
+        fun consider(nx: Int, ny: Int) {
+            if (nx < 0 || ny < 0 || nx >= columns || ny >= rows) return
+            val neighbor = index(nx, ny)
+            if (score[neighbor] > bestScore) {
+                bestScore = score[neighbor]
+                best = neighbor
             }
         }
-        h[best] = min(MAX_HEIGHT, target)
+        consider(x - 1, y)
+        consider(x + 1, y)
+        consider(x, y - 1)
+        consider(x, y + 1)
+        return best
     }
 
     private fun depositPourFoam() {
@@ -284,11 +459,10 @@ class CoffeeFluid(
         }
     }
 
-    private fun depositDisturbanceFoam(dt: Float) {
-        val limit = DISTURBANCE_THRESHOLD * dt
+    private fun depositDisturbanceFoam() {
         for (i in motion.indices) {
-            if (h[i] <= DRY || motion[i] <= limit) continue
-            val added = (motion[i] / dt - DISTURBANCE_THRESHOLD) * DISTURBANCE_GAIN
+            if (h[i] <= DRY || motion[i] <= DISTURBANCE_CELLS) continue
+            val added = (motion[i] - DISTURBANCE_CELLS) * DISTURBANCE_GAIN
             foam[i] = min(1f, foam[i] + added)
         }
     }
@@ -296,12 +470,12 @@ class CoffeeFluid(
     /**
      * Donor-cell advection. Foam moves with the liquid and also slides toward
      * the low side. Flux stops at a dry neighbor, so crema piles on the shore
-     * instead of falling off the glass or being recreated at the far wall.
+     * instead of falling off the glass.
      */
     private fun advectFoam(dt: Float, ax: Float, ay: Float) {
         val gravity = hypot(ax, ay)
-        val driftX = if (gravity < 0.6f) 0f else ax / gravity * FOAM_DRIFT_CELLS_PER_SEC
-        val driftY = if (gravity < 0.6f) 0f else ay / gravity * FOAM_DRIFT_CELLS_PER_SEC
+        val driftX = if (gravity < 0.6f) 0f else ax / gravity * foamDrift
+        val driftY = if (gravity < 0.6f) 0f else ay / gravity * foamDrift
         foamOutgoing.fill(0f)
         for (y in 0 until rows) {
             for (x in 0 until columns - 1) {
@@ -322,8 +496,7 @@ class CoffeeFluid(
             }
         }
         for (i in foamOutgoing.indices) {
-            if (foamOutgoing[i] > 1f) foamOutgoing[i] = 1f / foamOutgoing[i]
-            else foamOutgoing[i] = 1f
+            if (foamOutgoing[i] > 1f) foamOutgoing[i] = 1f / foamOutgoing[i] else foamOutgoing[i] = 1f
         }
         foam.copyInto(foamScratch)
         for (y in 0 until rows) {
@@ -369,21 +542,30 @@ class CoffeeFluid(
         val left = if (x > 0) flowRight[rightEdge(x - 1, y)] else 0f
         val right = if (x + 1 < columns) flowRight[rightEdge(x, y)] else 0f
         val depth = max(h[index(x, y)], 0.2f)
-        return ((left + right) * 0.5f / depth).coerceIn(-MAX_FLOW, MAX_FLOW)
+        return ((left + right) * 0.5f / depth).coerceIn(-maxFlow, maxFlow)
     }
 
     private fun verticalSpeed(x: Int, y: Int): Float {
         val above = if (y > 0) flowDown[downEdge(x, y - 1)] else 0f
         val below = if (y + 1 < rows) flowDown[downEdge(x, y)] else 0f
         val depth = max(h[index(x, y)], 0.2f)
-        return ((above + below) * 0.5f / depth).coerceIn(-MAX_FLOW, MAX_FLOW)
+        return ((above + below) * 0.5f / depth).coerceIn(-maxFlow, maxFlow)
     }
 
-    /** Flow into an already full cell has nowhere to go, so it must not keep spinning. */
-    private fun stopAtLid(flow: Float, sourceHeight: Float, destinationHeight: Float): Float {
-        val intoRightOrDown = flow > 0f && destinationHeight >= MAX_HEIGHT - 0.02f
-        val intoLeftOrUp = flow < 0f && sourceHeight >= MAX_HEIGHT - 0.02f
-        return if (intoRightOrDown || intoLeftOrUp) flow * 0.15f else flow
+    /** A dry cell has nothing to send. Phantom current above the surface should die. */
+    private fun stopFromDry(flow: Float, leftOrTop: Float, rightOrBottom: Float): Float {
+        val source = if (flow > 0f) leftOrTop else rightOrBottom
+        return if (source <= DRY) 0f else flow
+    }
+
+    /** Positive flow moves toward [rightOrBottom]. Block it when that side is already full. */
+    private fun stopIntoFull(flow: Float, leftOrTop: Float, rightOrBottom: Float): Float {
+        val destinationFull = if (flow > 0f) {
+            rightOrBottom >= MAX_HEIGHT - 0.02f
+        } else {
+            leftOrTop >= MAX_HEIGHT - 0.02f
+        }
+        return if (destinationFull) 0f else flow
     }
 
     private fun pinnedPair(a: Float, b: Float): Boolean {
@@ -407,23 +589,35 @@ class CoffeeFluid(
         const val FOAM_LIFETIME_SECONDS = 100f
 
         private const val DRY = 0.015f
-        private const val PRESSURE = 18f
-        private const val GRAVITY_GAIN = 0.42f
-        private const val VISCOSITY = 4.2f
-        private const val GYRO_GAIN = 2.4f
-        private const val MAX_FLOW = 8f
+        private const val SUPPORTED_HEIGHT = 0.92f
+        private const val VISCOSITY = 1.15f
+        private const val TENSION = 0.035f
         private const val MAX_GYRO = 8f
-        private const val SUBSTEP_SECONDS = 1f / 90f
-        private const val DISTURBANCE_THRESHOLD = 0.65f
-        private const val DISTURBANCE_GAIN = 0.35f
-        private const val FOAM_DRIFT_CELLS_PER_SEC = 3.2f
+        private const val DISTURBANCE_CELLS = 0.18f
+        private const val DISTURBANCE_GAIN = 2.2f
 
         /**
-         * TYPE_GRAVITY points at the sky. Screen axes are +x right and +y down,
-         * so the acceleration of the coffee is (-gravityX, +gravityY).
+         * How many cell-heights the free surface would fall across the glass
+         * if columns were not clamped. Large enough that coffee packs against
+         * the low edge and the leftover is a thin surface band.
          */
-        fun screenAcceleration(gravityX: Float, gravityY: Float): Pair<Float, Float> {
-            return -gravityX to gravityY
+        private const val DROP_ACROSS_GLASS = 18f
+
+        /**
+         * TYPE_GRAVITY points at the sky in the device's natural orientation
+         * (+x right, +y up). [rotation] is [android.view.Surface.getRotation]:
+         * 0 upright, 1 rotated 90° counterclockwise, 2 upside down, 3 the other way.
+         * The returned acceleration is in screen space, +x right and +y down,
+         * so an upright phone sends coffee toward the bottom edge.
+         */
+        fun screenAcceleration(gravityX: Float, gravityY: Float, rotation: Int = 0): Pair<Float, Float> {
+            val (right, up) = when (rotation) {
+                1 -> -gravityY to gravityX
+                2 -> -gravityX to -gravityY
+                3 -> gravityY to -gravityX
+                else -> gravityX to gravityY
+            }
+            return -right to up
         }
     }
 }
