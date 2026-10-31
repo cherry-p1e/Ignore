@@ -924,10 +924,13 @@ public final class DebugCommands {
             if (!builder.isEmpty()) {
                 builder.append(',');
             }
-            String value = container.get(key, PersistentDataType.STRING);
-            if (value == null) {
-                Byte bite = container.get(key, PersistentDataType.BYTE);
-                value = bite == null ? "?" : Byte.toString(bite);
+            String value;
+            if (container.has(key, PersistentDataType.STRING)) {
+                value = container.get(key, PersistentDataType.STRING);
+            } else if (container.has(key, PersistentDataType.BYTE)) {
+                value = Byte.toString(container.get(key, PersistentDataType.BYTE));
+            } else {
+                value = "?";
             }
             builder.append(key).append('=').append(value);
         }
