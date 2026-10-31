@@ -171,6 +171,10 @@ public final class StructureListener implements Listener {
         return ArmResult.ARMED;
     }
 
+    /**
+     * Locks a chest that has no guard and returns the new lock id.
+     * Does not create a key. Returns null when the block cannot be locked.
+     */
     public UUID lockNewChest(Block chest) {
         UUID lockId = UUID.randomUUID();
         if (!lockChest(chest, lockId)) {
