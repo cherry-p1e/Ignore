@@ -11,7 +11,7 @@
   "size": 1,
   "spawn_overrides": {},
   "start_height": {
-    "absolute": 0
+    "absolute": 2
   },
   "start_pool": "violetarchive:tower",
   "step": "surface_structures",
