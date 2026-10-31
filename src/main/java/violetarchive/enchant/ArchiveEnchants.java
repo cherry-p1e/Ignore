@@ -6,6 +6,10 @@ import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
+/**
+ * Looks up Vindicta, Ration, and Anima after bootstrap has registered them.
+ * This class does not register enchantments.
+ */
 public final class ArchiveEnchants {
     public static final NamespacedKey VINDICTA = new NamespacedKey("violetarchive", "vindicta");
     public static final NamespacedKey RATION = new NamespacedKey("violetarchive", "ration");

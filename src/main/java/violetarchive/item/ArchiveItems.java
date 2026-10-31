@@ -24,6 +24,10 @@ public final class ArchiveItems {
         return stack;
     }
 
+    /**
+     * A key that stores only its lock id. {@link #render} adds the visible name
+     * later. The chest lock item never receives that name.
+     */
     public static ItemStack key(UUID lockId) {
         ItemStack stack = new ItemStack(Material.AMETHYST_SHARD);
         stack.editPersistentDataContainer(container -> {

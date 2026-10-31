@@ -19,6 +19,11 @@ import violetarchive.structure.WatcherMind;
 import violetarchive.world.AmethystForestPopulator;
 import violetarchive.world.ForestListener;
 
+/**
+ * Runtime entry. The datapack and enchantments are registered earlier by
+ * {@link violetarchive.bootstrap.VioletArchiveBootstrap}. Debug commands are
+ * registered in the constructor, not from {@code paper-plugin.yml}.
+ */
 public final class VioletArchivePlugin extends JavaPlugin {
     private static VioletArchivePlugin instance;
     private Translations translations;
@@ -63,6 +68,10 @@ public final class VioletArchivePlugin extends JavaPlugin {
         return structures;
     }
 
+    /**
+     * Anima follow distance after config checks. A missing value, a non-number,
+     * or a number outside 0.5 through 64 has already been replaced with 4.5.
+     */
     public double followDistance() {
         return followDistance;
     }

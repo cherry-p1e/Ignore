@@ -1,6 +1,7 @@
 package violetarchive.item;
 
 import java.util.UUID;
+import io.papermc.paper.event.block.BlockLockCheckEvent;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.block.Lockable;
@@ -31,28 +32,52 @@ public final class ArchiveLock implements Listener {
         if (block == null || !(block.getState() instanceof Container container) || !(container instanceof Lockable lockable)) {
             return;
         }
-        if (!lockable.isLocked() || !(container instanceof TileState tile)) {
+        if (!lockable.isLocked() || lockId(block) == null) {
             return;
         }
-        String raw = tile.getPersistentDataContainer().get(Keys.LOCK_ID, PersistentDataType.STRING);
-        if (raw == null) {
-            return;
-        }
-        UUID lockId;
-        try {
-            lockId = UUID.fromString(raw);
-        } catch (IllegalArgumentException exception) {
-            return;
-        }
-        Player player = event.getPlayer();
-        ItemStack main = player.getInventory().getItemInMainHand();
-        ItemStack off = player.getInventory().getItemInOffHand();
-        if (!ArchiveItems.isKeyFor(main, lockId) && !ArchiveItems.isKeyFor(off, lockId)) {
+        if (!holdsMatchingKey(event.getPlayer(), block)) {
             return;
         }
         event.setCancelled(true);
         event.setUseInteractedBlock(Event.Result.DENY);
         event.setUseItemInHand(Event.Result.DENY);
-        player.openInventory(container.getInventory());
+        event.getPlayer().openInventory(container.getInventory());
+    }
+
+    /**
+     * Chest menus ask this before they open. A matching key is allowed through.
+     * A mismatch leaves the default result, so the vanilla denial still shows.
+     */
+    @EventHandler
+    public void onLockCheck(BlockLockCheckEvent event) {
+        if (!holdsMatchingKey(event.getPlayer(), event.getBlock())) {
+            return;
+        }
+        event.setResult(Event.Result.ALLOW);
+    }
+
+    private static boolean holdsMatchingKey(Player player, Block block) {
+        UUID lockId = lockId(block);
+        if (player == null || lockId == null) {
+            return false;
+        }
+        ItemStack main = player.getInventory().getItemInMainHand();
+        ItemStack off = player.getInventory().getItemInOffHand();
+        return ArchiveItems.isKeyFor(main, lockId) || ArchiveItems.isKeyFor(off, lockId);
+    }
+
+    private static UUID lockId(Block block) {
+        if (block == null || !(block.getState() instanceof TileState tile)) {
+            return null;
+        }
+        String raw = tile.getPersistentDataContainer().get(Keys.LOCK_ID, PersistentDataType.STRING);
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(raw);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
     }
 }
