@@ -1,0 +1,23 @@
+{
+  "placement": {
+    "type": "minecraft:random_spread",
+    "exclusion_zone": {
+      "chunk_count": 8,
+      "other_set": "minecraft:end_cities"
+    },
+    "salt": 184270193,
+    "separation": 16,
+    "spacing": 32,
+    "spread_type": "triangular"
+  },
+  "structures": [
+    {
+      "structure": "violetarchive:library",
+      "weight": 1
+    },
+    {
+      "structure": "violetarchive:tower",
+      "weight": 1
+    }
+  ]
+}
