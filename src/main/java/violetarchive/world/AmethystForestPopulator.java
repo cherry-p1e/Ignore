@@ -5,7 +5,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.bukkit.HeightMap;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
@@ -82,8 +81,11 @@ public final class AmethystForestPopulator extends BlockPopulator {
         }
         for (int x = baseX; x < baseX + 16; x++) {
             for (int z = baseZ; z < baseZ + 16; z++) {
-                int y = region.getHighestBlockYAt(x, z, HeightMap.WORLD_SURFACE);
-                if (!region.isInRegion(x, y, z) || region.getType(x, y, z) != Material.END_STONE) {
+                // WorldGenLevel.getHeight returns minY for a chunk still being
+                // generated, and one above the surface once the chunk exists.
+                // Walk the column so the top end stone is the block we mean.
+                int y = topEndStone(region, worldInfo, x, z);
+                if (y == Integer.MIN_VALUE) {
                     continue;
                 }
                 if (paint) {
@@ -97,13 +99,36 @@ public final class AmethystForestPopulator extends BlockPopulator {
                 }
                 BlockData cover = Math.floorMod(x + z, 2) == 0 ? calcite : amethyst;
                 region.setBlockData(x, y, z, cover.clone());
-                surface.add(new int[] {x, y, z});
+                if (region.isInRegion(x, y + 1, z) && region.getType(x, y + 1, z).isAir()) {
+                    surface.add(new int[] {x, y, z});
+                }
             }
         }
         if (surface.size() < 16) {
             return;
         }
         placeTrees(region, random, surface);
+    }
+
+    private static int topEndStone(LimitedRegion region, WorldInfo world, int x, int z) {
+        int min = world.getMinHeight();
+        for (int y = world.getMaxHeight() - 1; y >= min; y--) {
+            if (!region.isInRegion(x, y, z)) {
+                continue;
+            }
+            Material type = region.getType(x, y, z);
+            if (type.isAir()) {
+                continue;
+            }
+            if (type == Material.END_STONE) {
+                return y;
+            }
+            if (type == Material.CHORUS_PLANT || type == Material.CHORUS_FLOWER) {
+                continue;
+            }
+            return Integer.MIN_VALUE;
+        }
+        return Integer.MIN_VALUE;
     }
 
     private void placeTrees(LimitedRegion region, Random random, List<int[]> surface) {
