@@ -1,0 +1,9 @@
+name: VioletArchive
+version: '1.0.0'
+main: violetarchive.VioletArchivePlugin
+bootstrapper: violetarchive.bootstrap.VioletArchiveBootstrap
+api-version: '26.3'
+permissions:
+  violetarchive.debug:
+    description: Run Violet Archive debug checks.
+    default: op

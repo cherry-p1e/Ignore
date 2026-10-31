@@ -1,0 +1,469 @@
+{
+  "type": "minecraft:chest",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "modifier": [
+            {
+              "type": "minecraft:set_damage",
+              "damage": {
+                "type": "minecraft:uniform",
+                "min": 0.25,
+                "max": 0.8
+              }
+            },
+            {
+              "type": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:sharpness": 1
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "modifier": [
+            {
+              "type": "minecraft:set_damage",
+              "damage": {
+                "type": "minecraft:uniform",
+                "min": 0.25,
+                "max": 0.8
+              }
+            },
+            {
+              "type": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:sharpness": 2
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "modifier": [
+            {
+              "type": "minecraft:set_damage",
+              "damage": {
+                "type": "minecraft:uniform",
+                "min": 0.25,
+                "max": 0.8
+              }
+            },
+            {
+              "type": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:sharpness": 3
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "modifier": [
+            {
+              "type": "minecraft:set_damage",
+              "damage": {
+                "type": "minecraft:uniform",
+                "min": 0.25,
+                "max": 0.8
+              }
+            },
+            {
+              "type": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:smite": 1
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "modifier": [
+            {
+              "type": "minecraft:set_damage",
+              "damage": {
+                "type": "minecraft:uniform",
+                "min": 0.25,
+                "max": 0.8
+              }
+            },
+            {
+              "type": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:smite": 2
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "modifier": [
+            {
+              "type": "minecraft:set_damage",
+              "damage": {
+                "type": "minecraft:uniform",
+                "min": 0.25,
+                "max": 0.8
+              }
+            },
+            {
+              "type": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:smite": 3
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "modifier": [
+            {
+              "type": "minecraft:set_damage",
+              "damage": {
+                "type": "minecraft:uniform",
+                "min": 0.25,
+                "max": 0.8
+              }
+            },
+            {
+              "type": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:bane_of_arthropods": 1
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "modifier": [
+            {
+              "type": "minecraft:set_damage",
+              "damage": {
+                "type": "minecraft:uniform",
+                "min": 0.25,
+                "max": 0.8
+              }
+            },
+            {
+              "type": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:bane_of_arthropods": 2
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "modifier": [
+            {
+              "type": "minecraft:set_damage",
+              "damage": {
+                "type": "minecraft:uniform",
+                "min": 0.25,
+                "max": 0.8
+              }
+            },
+            {
+              "type": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:bane_of_arthropods": 3
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "modifier": [
+            {
+              "type": "minecraft:set_damage",
+              "damage": {
+                "type": "minecraft:uniform",
+                "min": 0.25,
+                "max": 0.8
+              }
+            },
+            {
+              "type": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:looting": 1
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "modifier": [
+            {
+              "type": "minecraft:set_damage",
+              "damage": {
+                "type": "minecraft:uniform",
+                "min": 0.25,
+                "max": 0.8
+              }
+            },
+            {
+              "type": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:looting": 2
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "modifier": [
+            {
+              "type": "minecraft:set_damage",
+              "damage": {
+                "type": "minecraft:uniform",
+                "min": 0.25,
+                "max": 0.8
+              }
+            },
+            {
+              "type": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:looting": 3
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "modifier": [
+            {
+              "type": "minecraft:set_damage",
+              "damage": {
+                "type": "minecraft:uniform",
+                "min": 0.25,
+                "max": 0.8
+              }
+            },
+            {
+              "type": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:sweeping_edge": 1
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "modifier": [
+            {
+              "type": "minecraft:set_damage",
+              "damage": {
+                "type": "minecraft:uniform",
+                "min": 0.25,
+                "max": 0.8
+              }
+            },
+            {
+              "type": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:sweeping_edge": 2
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:diamond_sword",
+          "modifier": [
+            {
+              "type": "minecraft:set_damage",
+              "damage": {
+                "type": "minecraft:uniform",
+                "min": 0.25,
+                "max": 0.8
+              }
+            },
+            {
+              "type": "minecraft:set_enchantments",
+              "enchantments": {
+                "minecraft:sweeping_edge": 3
+              }
+            }
+          ]
+        }
+      ],
+      "rolls": 1
+    },
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:book",
+          "modifier": {
+            "type": "minecraft:set_enchantments",
+            "enchantments": {
+              "minecraft:sharpness": 1
+            }
+          }
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:book",
+          "modifier": {
+            "type": "minecraft:set_enchantments",
+            "enchantments": {
+              "minecraft:sharpness": 2
+            }
+          }
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:book",
+          "modifier": {
+            "type": "minecraft:set_enchantments",
+            "enchantments": {
+              "minecraft:sharpness": 3
+            }
+          }
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:book",
+          "modifier": {
+            "type": "minecraft:set_enchantments",
+            "enchantments": {
+              "minecraft:smite": 1
+            }
+          }
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:book",
+          "modifier": {
+            "type": "minecraft:set_enchantments",
+            "enchantments": {
+              "minecraft:smite": 2
+            }
+          }
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:book",
+          "modifier": {
+            "type": "minecraft:set_enchantments",
+            "enchantments": {
+              "minecraft:smite": 3
+            }
+          }
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:book",
+          "modifier": {
+            "type": "minecraft:set_enchantments",
+            "enchantments": {
+              "minecraft:bane_of_arthropods": 1
+            }
+          }
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:book",
+          "modifier": {
+            "type": "minecraft:set_enchantments",
+            "enchantments": {
+              "minecraft:bane_of_arthropods": 2
+            }
+          }
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:book",
+          "modifier": {
+            "type": "minecraft:set_enchantments",
+            "enchantments": {
+              "minecraft:bane_of_arthropods": 3
+            }
+          }
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:book",
+          "modifier": {
+            "type": "minecraft:set_enchantments",
+            "enchantments": {
+              "minecraft:looting": 1
+            }
+          }
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:book",
+          "modifier": {
+            "type": "minecraft:set_enchantments",
+            "enchantments": {
+              "minecraft:looting": 2
+            }
+          }
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:book",
+          "modifier": {
+            "type": "minecraft:set_enchantments",
+            "enchantments": {
+              "minecraft:looting": 3
+            }
+          }
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:book",
+          "modifier": {
+            "type": "minecraft:set_enchantments",
+            "enchantments": {
+              "minecraft:sweeping_edge": 1
+            }
+          }
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:book",
+          "modifier": {
+            "type": "minecraft:set_enchantments",
+            "enchantments": {
+              "minecraft:sweeping_edge": 2
+            }
+          }
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:book",
+          "modifier": {
+            "type": "minecraft:set_enchantments",
+            "enchantments": {
+              "minecraft:sweeping_edge": 3
+            }
+          }
+        }
+      ],
+      "rolls": {
+        "type": "minecraft:uniform",
+        "min": 2,
+        "max": 5
+      }
+    }
+  ]
+}
